@@ -109,35 +109,56 @@ Thank you for your time, ${firstName}.`;
   }
 
   /**
-   * Check if current time is within allowed call hours
-   * @returns {boolean} True if within call hours
+   * Check if current time is within allowed call hours (9 AM - 5 PM, Monday-Friday)
+   * @param {Date} testDate - Optional date for testing (defaults to current time)
+   * @returns {boolean} True if within business call hours
    */
-  isWithinCallHours() {
+  isWithinCallHours(testDate = null) {
     try {
-      const now = new Date();
+      const now = testDate || new Date();
       const timeZone = this.config.timezone;
       
-      // Get current time in the specified timezone
-      const currentTime = new Intl.DateTimeFormat('en-US', {
+      // Get current day of week and time in the specified timezone
+      const currentDateTime = new Intl.DateTimeFormat('en-US', {
         timeZone,
         hour12: false,
         hour: '2-digit',
-        minute: '2-digit'
-      }).format(now);
+        minute: '2-digit',
+        weekday: 'long'
+      }).formatToParts(now);
 
-      const [currentHour, currentMinute] = currentTime.split(':').map(Number);
-      const currentMinutes = currentHour * 60 + currentMinute;
+      // Extract parts
+      const dayOfWeek = currentDateTime.find(part => part.type === 'weekday')?.value;
+      const hour = parseInt(currentDateTime.find(part => part.type === 'hour')?.value);
+      const minute = parseInt(currentDateTime.find(part => part.type === 'minute')?.value);
 
+      // Check if it's a weekday (Monday-Friday)
+      const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+      if (!weekdays.includes(dayOfWeek)) {
+        return false; // No calls on weekends
+      }
+
+      // Convert current time to minutes since midnight
+      const currentMinutes = hour * 60 + minute;
+
+      // Parse configured call hours (default: 9 AM - 5 PM)
       const [startHour, startMinute] = this.config.callHoursStart.split(':').map(Number);
       const startMinutes = startHour * 60 + startMinute;
 
       const [endHour, endMinute] = this.config.callHoursEnd.split(':').map(Number);
       const endMinutes = endHour * 60 + endMinute;
 
-      return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+      // Check if current time is within business hours
+      const withinHours = currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+
+      if (!withinHours) {
+        console.log(`🕐 Outside business hours: Current time is ${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')} ${dayOfWeek} (${timeZone}), business hours are ${this.config.callHoursStart}-${this.config.callHoursEnd} Monday-Friday`);
+      }
+
+      return withinHours;
     } catch (error) {
       console.warn('Error checking call hours:', error.message);
-      return true; // Default to allowing calls if time check fails
+      return false; // Default to NOT allowing calls if time check fails (safer approach)
     }
   }
 

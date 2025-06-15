@@ -80,7 +80,10 @@ Best,
 
       mockOpenAI.chat.completions.create.resolves(mockResponse);
 
-      const result = await personalizeTemplate(template, leadData, senderInfo, { client: mockOpenAI });
+      const result = await personalizeTemplate(template, leadData, senderInfo, {
+        apiKey: 'test-api-key',
+        client: mockOpenAI
+      });
 
       expect(result).to.have.property('subject');
       expect(result).to.have.property('body');
@@ -94,7 +97,10 @@ Best,
       mockOpenAI.chat.completions.create.rejects(new Error('API Error'));
 
       try {
-        await personalizeTemplate(template, leadData, senderInfo, { client: mockOpenAI });
+        await personalizeTemplate(template, leadData, senderInfo, {
+          apiKey: 'test-api-key',
+          client: mockOpenAI
+        });
         expect.fail('Should have thrown an error');
       } catch (error) {
         expect(error.message).to.include('AI personalization failed');
@@ -102,9 +108,10 @@ Best,
     });
 
     it('should fall back to basic personalization if AI fails', async () => {
-      const result = await personalizeTemplate(template, leadData, senderInfo, { 
+      const result = await personalizeTemplate(template, leadData, senderInfo, {
+        apiKey: 'test-api-key',
         client: mockOpenAI,
-        fallbackToBasic: true 
+        fallbackToBasic: true
       });
 
       expect(result.subject).to.include('Acme Corp');
@@ -139,7 +146,10 @@ Best,
 
       mockOpenAI.chat.completions.create.resolves(mockResponse);
 
-      const result = await generatePlaceholderValues(placeholders, leadData, { client: mockOpenAI });
+      const result = await generatePlaceholderValues(placeholders, leadData, {}, {
+        apiKey: 'test-api-key',
+        client: mockOpenAI
+      });
 
       expect(result).to.have.property('FIRST_NAME', 'John');
       expect(result).to.have.property('COMPANY_NAME', 'Acme Corp');
@@ -159,7 +169,10 @@ Best,
       mockOpenAI.chat.completions.create.resolves(mockResponse);
 
       try {
-        await generatePlaceholderValues(placeholders, leadData, { client: mockOpenAI });
+        await generatePlaceholderValues(placeholders, leadData, {}, {
+          apiKey: 'test-api-key',
+          client: mockOpenAI
+        });
         expect.fail('Should have thrown an error');
       } catch (error) {
         expect(error.message).to.include('Invalid AI response format');

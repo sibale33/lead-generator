@@ -104,7 +104,11 @@ describe('Email Service', () => {
 
       mockMailgun.messages.create.resolves(mockResponse);
 
-      const result = await sendEmail(emailData, { client: mockMailgun, domain: 'test.com' });
+      const result = await sendEmail(emailData, {
+        apiKey: 'test-api-key',
+        client: mockMailgun,
+        domain: 'test.com'
+      });
 
       expect(result.success).to.be.true;
       expect(result.messageId).to.equal('<test-message-id>');
@@ -115,7 +119,11 @@ describe('Email Service', () => {
       const error = new Error('Invalid email address');
       mockMailgun.messages.create.rejects(error);
 
-      const result = await sendEmail(emailData, { client: mockMailgun, domain: 'test.com' });
+      const result = await sendEmail(emailData, {
+        apiKey: 'test-api-key',
+        client: mockMailgun,
+        domain: 'test.com'
+      });
 
       expect(result.success).to.be.false;
       expect(result.error).to.include('Invalid email address');
@@ -128,17 +136,22 @@ describe('Email Service', () => {
         body: 'Test'
       };
 
-      const result = await sendEmail(invalidEmailData, { client: mockMailgun, domain: 'test.com' });
+      const result = await sendEmail(invalidEmailData, {
+        apiKey: 'test-api-key',
+        client: mockMailgun,
+        domain: 'test.com'
+      });
 
       expect(result.success).to.be.false;
       expect(result.error).to.include('validation failed');
     });
 
     it('should handle dry run mode', async () => {
-      const result = await sendEmail(emailData, { 
-        client: mockMailgun, 
+      const result = await sendEmail(emailData, {
+        apiKey: 'test-api-key',
+        client: mockMailgun,
         domain: 'test.com',
-        dryRun: true 
+        dryRun: true
       });
 
       expect(result.success).to.be.true;
@@ -172,6 +185,7 @@ describe('Email Service', () => {
       mockMailgun.messages.create.resolves(mockResponse);
 
       const results = await sendBatchEmails(emailBatch, {
+        apiKey: 'test-api-key',
         client: mockMailgun,
         domain: 'test.com',
         batchSize: 2,
@@ -190,6 +204,7 @@ describe('Email Service', () => {
         .onSecondCall().rejects(new Error('Rate limit exceeded'));
 
       const results = await sendBatchEmails(emailBatch, {
+        apiKey: 'test-api-key',
         client: mockMailgun,
         domain: 'test.com',
         batchSize: 2,
@@ -212,6 +227,7 @@ describe('Email Service', () => {
       mockMailgun.messages.create.resolves({ id: '<msg>', message: 'Queued' });
 
       const results = await sendBatchEmails(largeBatch, {
+        apiKey: 'test-api-key',
         client: mockMailgun,
         domain: 'test.com',
         batchSize: 2,
@@ -222,26 +238,23 @@ describe('Email Service', () => {
       expect(results.batches).to.equal(3); // 5 emails in batches of 2
     });
 
-    it('should add delays between batches', async () => {
-      const clock = sinon.useFakeTimers();
+    it('should add delays between batches', async function() {
+      this.timeout(15000);
       
       mockMailgun.messages.create.resolves({ id: '<msg>', message: 'Queued' });
 
-      const promise = sendBatchEmails(emailBatch, {
+      const startTime = Date.now();
+      const results = await sendBatchEmails(emailBatch, {
+        apiKey: 'test-api-key',
         client: mockMailgun,
         domain: 'test.com',
         batchSize: 1,
-        delay: 1000
+        delay: 100 // Use shorter delay for testing
       });
-
-      // Fast-forward time
-      clock.tick(2000);
-      
-      const results = await promise;
+      const endTime = Date.now();
       
       expect(results.successful).to.equal(2);
-      
-      clock.restore();
+      expect(endTime - startTime).to.be.greaterThan(90); // Should take at least 100ms for delay
     });
   });
 
@@ -288,6 +301,7 @@ describe('Email Service', () => {
       };
 
       const result = await sendEmail(emailData, {
+        apiKey: 'test-api-key',
         client: mockMailgun,
         domain: 'test.com',
         maxRetries: 2,
@@ -311,6 +325,7 @@ describe('Email Service', () => {
       };
 
       const result = await sendEmail(emailData, {
+        apiKey: 'test-api-key',
         client: mockMailgun,
         domain: 'test.com',
         maxRetries: 2,
