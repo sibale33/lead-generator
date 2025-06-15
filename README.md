@@ -1,16 +1,18 @@
 # Lead Generator
 
-A powerful CLI tool and Node.js module for sending mass lead emails with AI-powered personalization. Built for sales teams who want to scale their outreach while maintaining personalization and professionalism.
+A powerful CLI tool and Node.js module for sending mass lead emails with AI-powered personalization and automated voice cold-calling. Built for sales teams who want to scale their outreach while maintaining personalization and professionalism.
 
 ## Features
 
 - 📧 **Mass Email Campaigns** - Send personalized emails to hundreds of leads
+- 📞 **Voice AI Cold-calling** - Automated cold calling with Bland.ai integration
 - 🤖 **AI Personalization** - OpenAI-powered template customization
 - 📊 **CSV Processing** - Import leads from CSV files with validation
 - 🎯 **Smart Templates** - 10 pre-built sales email templates
 - 📈 **Batch Processing** - Configurable batch sizes with rate limiting
 - 🔍 **Email Validation** - Comprehensive lead data validation
-- 📞 **Voice AI Ready** - Stub implementation for future Twilio integration
+- 🎣 **Webhook Server** - Real-time call outcome processing with Hono.js
+- 🎛️ **IVR System** - Press 1 for Calendly, Press 2 to opt-out
 - 🛠️ **CLI & Module** - Use as command-line tool or Node.js module
 
 ## Installation
@@ -37,12 +39,21 @@ pnpm install -g @profullstack/lead-generator
 Create a `.env` file with your API keys:
 
 ```bash
-# Mailgun Configuration (Required)
+# Mailgun Configuration (Required for email campaigns)
 MAILGUN_API_KEY=your_mailgun_api_key_here
 MAILGUN_DOMAIN=your_mailgun_domain_here
 
 # OpenAI Configuration (Required for AI personalization)
 OPENAI_API_KEY=your_openai_api_key_here
+
+# Bland.ai Configuration (Required for voice calling)
+BLAND_AI_API_KEY=your_bland_ai_api_key_here
+VOICE_WEBHOOK_PORT=3001
+VOICE_WEBHOOK_URL=https://your-domain.com/webhook
+
+# SMS & Calendly Configuration (Optional)
+SMS_SERVICE_API_KEY=your_sms_api_key_here
+CALENDLY_LINK=https://calendly.com/your-meeting-link
 
 # Sender Information
 DEFAULT_FROM_EMAIL=your_name@your_domain.com
@@ -116,16 +127,48 @@ Options:
   --output, -o           Save validation report to file
 ```
 
-#### Voice AI Status
+#### Voice AI Cold-calling
 ```bash
-lead-generator voice <csv-file>
+# Start cold-calling campaign
+lead-generator coldcall run <csv-file> [options]
+
+Options:
+  --script               Voice script template (default: "default")
+  --batch-size          Number of calls per batch (default: 10)
+  --delay               Delay between calls in seconds (default: 30)
+  --dry-run             Simulate calling without making actual calls
+  --output, -o          Save campaign results to file
+
+# Check campaign status
+lead-generator coldcall status [options]
+
+Options:
+  --campaign-id         Specific campaign ID to check
+  --detailed, -d        Show detailed status information
+
+# Generate call reports
+lead-generator coldcall report [options]
+
+Options:
+  --campaign-id         Specific campaign ID to report on
+  --output, -o          Output file for report (default: "call-report.csv")
+  --format              Report format: csv or json (default: "csv")
 ```
 
 ### Examples
 
 ```bash
-# Send campaign with specific template
+# Send email campaign with specific template
 lead-generator send leads.csv --template problem-solver --dry-run
+
+# Start voice calling campaign
+lead-generator coldcall run contacts.csv --batch-size 5 --delay 45
+
+# Check status of specific campaign
+lead-generator coldcall status --campaign-id abc123 --detailed
+
+# Generate detailed call report
+lead-generator coldcall report --format json --output call-results.json
 
 # List all templates with details
 lead-generator templates --details
@@ -135,6 +178,94 @@ lead-generator validate leads.csv --output validation-report.json
 
 # Send campaign and save results
 lead-generator send leads.csv -t expansion -o campaign-results.json
+```
+
+## Voice AI Cold-calling
+
+### Quick Start
+
+```bash
+# 1. Prepare CSV with phone numbers
+# Required columns: Name, PhoneNumber, Email (optional)
+
+# 2. Start cold-calling campaign
+lead-generator coldcall run contacts.csv
+
+# 3. Monitor campaign progress
+lead-generator coldcall status
+
+# 4. Generate detailed reports
+lead-generator coldcall report --format json
+```
+
+### CSV Format for Voice Calling
+
+Your CSV file should include these columns for voice campaigns:
+- `Name` (required) - Contact's full name
+- `PhoneNumber` (required) - Phone number in international format (+1234567890)
+- `Email` (optional) - For follow-up emails
+- `Company` (optional) - Company name for personalization
+
+Example CSV:
+```csv
+Name,PhoneNumber,Email,Company
+John Doe,+1234567890,john@acme.com,Acme Corp
+Jane Smith,+1987654321,jane@beta.com,Beta Inc
+Bob Johnson,+1555123456,bob@gamma.com,Gamma LLC
+```
+
+### IVR System
+
+The voice AI includes an interactive voice response (IVR) system:
+
+- **Press 1**: Interested in learning more
+  - Automatically sends SMS with Calendly link
+  - Logs as "scheduled meeting" in analytics
+  
+- **Press 2**: Not interested / Opt out
+  - Adds contact to do-not-call list
+  - Logs as "opted out" in analytics
+
+### Webhook Server
+
+The system includes a Hono.js webhook server that:
+
+- **Receives real-time callbacks** from Bland.ai when calls complete
+- **Processes IVR responses** automatically (Press 1/2 handling)
+- **Sends SMS messages** with Calendly links for interested prospects
+- **Manages do-not-call lists** for opt-outs
+- **Generates analytics** and call statistics
+- **Logs all call outcomes** to JSON files
+
+#### Webhook Endpoints
+
+- `POST /webhook` - Main Bland.ai callback endpoint
+- `GET /health` - Health check
+- `GET /logs` - Retrieve call logs
+- `GET /stats` - Get call statistics
+- `DELETE /logs` - Clear logs (testing)
+
+### Voice Campaign Analytics
+
+Track comprehensive metrics:
+
+- **Answer Rate**: Percentage of calls answered
+- **Conversion Rate**: Percentage who pressed 1 (interested)
+- **Opt-out Rate**: Percentage who pressed 2
+- **Average Call Duration**: Mean call length
+- **Campaign ROI**: Cost per interested prospect
+
+Example analytics output:
+```json
+{
+  "total": 100,
+  "answered": 65,
+  "scheduledMeetings": 12,
+  "optedOut": 8,
+  "answerRate": "65.00%",
+  "conversionRate": "18.46%",
+  "averageDuration": 45
+}
 ```
 
 ## Node.js Module Usage
@@ -175,33 +306,117 @@ const results = await quickStart('leads.csv', {
 });
 ```
 
+### Voice AI Module Usage
+
+```javascript
+import { BlandAIService, startWebhookServer } from '@profullstack/lead-generator';
+
+// Initialize Bland.ai service
+const blandService = new BlandAIService({
+  apiKey: 'your-bland-ai-key',
+  webhookUrl: 'https://your-domain.com/webhook'
+});
+
+// Start webhook server
+const webhookServer = await startWebhookServer({
+  port: 3001,
+  calendlyLink: 'https://calendly.com/your-meeting'
+});
+
+// Process contacts for calling
+const { validLeads } = await processLeadsFromCSV('contacts.csv', {
+  requirePhone: true
+});
+
+// Start call campaign
+const campaign = await blandService.startCallCampaign(validLeads, {
+  batchSize: 10,
+  delay: 30000, // 30 seconds between calls
+  script: 'default'
+});
+
+console.log(`Campaign ${campaign.campaignId} started with ${campaign.totalCalls} calls`);
+
+// Check campaign status
+const status = await blandService.getCampaignStatus(campaign.campaignId);
+console.log(`Campaign status: ${status.status}, completed: ${status.completed}`);
+
+// Generate report
+const report = await blandService.generateCampaignReport(campaign.campaignId);
+console.log(`Answer rate: ${report.answerRate}%, Conversion rate: ${report.conversionRate}%`);
+```
+
+### Webhook Server Usage
+
+```javascript
+import { WebhookServer } from '@profullstack/lead-generator';
+
+// Create webhook server
+const server = new WebhookServer({
+  port: 3001,
+  logFile: './logs/call-outcomes.json',
+  calendlyLink: 'https://calendly.com/your-meeting',
+  smsApiKey: 'your-sms-api-key'
+});
+
+// Start server
+await server.start();
+console.log('Webhook server running on port 3001');
+
+// Access call logs
+const logs = server.callLogs;
+console.log(`Total calls logged: ${logs.length}`);
+
+// Get statistics
+const stats = server.generateStats();
+console.log(`Answer rate: ${stats.answerRate}%`);
+console.log(`Conversion rate: ${stats.conversionRate}%`);
+
+// Stop server when done
+await server.stop();
+```
+
 ### Individual Module Usage
 
 ```javascript
-import { 
-  processLeadsFromCSV, 
-  personalizeTemplate, 
+import {
+  processLeadsFromCSV,
+  personalizeTemplate,
   sendBatchEmails,
-  getTemplateById 
+  getTemplateById,
+  BlandAIService,
+  WebhookServer
 } from '@profullstack/lead-generator';
 
-// Process CSV
+// Process CSV for email campaigns
 const { validLeads } = await processLeadsFromCSV('leads.csv');
+
+// Process CSV for voice campaigns (requires phone numbers)
+const { validLeads: voiceLeads } = await processLeadsFromCSV('contacts.csv', {
+  requirePhone: true
+});
 
 // Get template
 const template = getTemplateById('expansion');
 
 // Personalize emails
 const personalizedEmails = await batchPersonalize(
-  [template], 
-  validLeads, 
+  [template],
+  validLeads,
   { name: 'Your Name', email: 'you@company.com' }
 );
 
 // Send emails
-const results = await sendBatchEmails(emailsToSend, {
+const emailResults = await sendBatchEmails(emailsToSend, {
   apiKey: 'your-mailgun-key',
   domain: 'your-domain.com'
+});
+
+// Make voice calls
+const blandService = new BlandAIService({ apiKey: 'your-bland-ai-key' });
+const callResults = await blandService.startCallCampaign(voiceLeads, {
+  batchSize: 5,
+  delay: 45000
 });
 ```
 
@@ -225,16 +440,33 @@ const results = await sendBatchEmails(emailsToSend, {
 ### Environment Variables
 
 ```bash
-# Mailgun Configuration
+# Mailgun Configuration (Email Campaigns)
 MAILGUN_API_KEY=your_mailgun_api_key
 MAILGUN_DOMAIN=your_mailgun_domain
 MAILGUN_BASE_URL=https://api.mailgun.net
 
-# OpenAI Configuration
+# OpenAI Configuration (AI Personalization)
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_MODEL=gpt-4o-mini
 OPENAI_MAX_TOKENS=500
 OPENAI_TEMPERATURE=0.7
+
+# Bland.ai Configuration (Voice Calling)
+BLAND_AI_API_KEY=your_bland_ai_api_key
+BLAND_AI_BASE_URL=https://api.bland.ai
+VOICE_WEBHOOK_PORT=3001
+VOICE_WEBHOOK_URL=https://your-domain.com/webhook
+
+# Call Configuration
+CALL_BATCH_SIZE=10
+CALL_DELAY_SECONDS=30
+CALL_HOURS_START=9
+CALL_HOURS_END=17
+CALL_TIMEZONE=America/New_York
+
+# SMS & Calendly Configuration
+SMS_SERVICE_API_KEY=your_sms_api_key
+CALENDLY_LINK=https://calendly.com/your-meeting-link
 
 # Email Configuration
 DEFAULT_FROM_EMAIL=your_email@domain.com

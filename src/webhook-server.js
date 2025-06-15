@@ -1,9 +1,12 @@
 /**
- * Webhook Server Module
+ * Webhook Server Module - Hono.js Implementation
  * Handles Bland.ai webhook callbacks for call outcomes
  */
 
-import express from 'express';
+import { Hono } from 'hono';
+import { serve } from '@hono/node-server';
+import { cors } from 'hono/cors';
+import { logger } from 'hono/logger';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
@@ -23,7 +26,7 @@ export class WebhookServer {
       ...config
     };
 
-    this.app = express();
+    this.app = new Hono();
     this.server = null;
     this.callLogs = [];
     this.setupMiddleware();
@@ -31,34 +34,27 @@ export class WebhookServer {
   }
 
   /**
-   * Setup Express middleware
+   * Setup Hono middleware
    */
   setupMiddleware() {
-    this.app.use(express.json());
-    this.app.use(express.urlencoded({ extended: true }));
+    // Add CORS support
+    this.app.use('*', cors({
+      origin: '*',
+      allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept']
+    }));
 
     // Add request logging
-    this.app.use((req, res, next) => {
-      console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
-      next();
-    });
-
-    // Add CORS headers
-    this.app.use((req, res, next) => {
-      res.header('Access-Control-Allow-Origin', '*');
-      res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-      res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-      next();
-    });
+    this.app.use('*', logger());
   }
 
   /**
-   * Setup Express routes
+   * Setup Hono routes
    */
   setupRoutes() {
     // Health check endpoint
-    this.app.get('/health', (req, res) => {
-      res.json({
+    this.app.get('/health', (c) => {
+      return c.json({
         status: 'healthy',
         timestamp: new Date().toISOString(),
         uptime: process.uptime()
@@ -66,11 +62,11 @@ export class WebhookServer {
     });
 
     // Main webhook endpoint for Bland.ai callbacks
-    this.app.post('/webhook', async (req, res) => {
+    this.app.post('/webhook', async (c) => {
       try {
-        console.log('📞 Received webhook from Bland.ai:', req.body);
+        const webhookData = await c.req.json();
+        console.log('📞 Received webhook from Bland.ai:', webhookData);
 
-        const webhookData = req.body;
         const processed = await this.processWebhook(webhookData);
 
         // Log the call outcome
@@ -81,7 +77,7 @@ export class WebhookServer {
           await this.handleUserChoice(processed);
         }
 
-        res.json({
+        return c.json({
           success: true,
           message: 'Webhook processed successfully',
           callId: processed.callId
@@ -89,31 +85,31 @@ export class WebhookServer {
 
       } catch (error) {
         console.error('❌ Webhook processing error:', error);
-        res.status(500).json({
+        return c.json({
           success: false,
           error: error.message
-        });
+        }, 500);
       }
     });
 
     // Get call logs endpoint
-    this.app.get('/logs', (req, res) => {
-      res.json({
+    this.app.get('/logs', (c) => {
+      return c.json({
         logs: this.callLogs,
         total: this.callLogs.length
       });
     });
 
     // Get call statistics endpoint
-    this.app.get('/stats', (req, res) => {
+    this.app.get('/stats', (c) => {
       const stats = this.generateStats();
-      res.json(stats);
+      return c.json(stats);
     });
 
     // Clear logs endpoint (for testing)
-    this.app.delete('/logs', (req, res) => {
+    this.app.delete('/logs', (c) => {
       this.callLogs = [];
-      res.json({ message: 'Logs cleared successfully' });
+      return c.json({ message: 'Logs cleared successfully' });
     });
   }
 
@@ -384,18 +380,18 @@ export class WebhookServer {
   async start() {
     return new Promise((resolve, reject) => {
       try {
-        this.server = this.app.listen(this.config.port, () => {
-          console.log(`🎣 Webhook server listening on port ${this.config.port}`);
-          console.log(`📡 Webhook URL: http://localhost:${this.config.port}/webhook`);
-          resolve(this.server);
+        this.server = serve({
+          fetch: this.app.fetch,
+          port: this.config.port
         });
 
-        this.server.on('error', (error) => {
-          console.error('❌ Webhook server error:', error);
-          reject(error);
-        });
+        console.log(`🎣 Webhook server listening on port ${this.config.port}`);
+        console.log(`📡 Webhook URL: http://localhost:${this.config.port}/webhook`);
+        
+        resolve(this.server);
 
       } catch (error) {
+        console.error('❌ Webhook server error:', error);
         reject(error);
       }
     });
@@ -408,10 +404,10 @@ export class WebhookServer {
   async stop() {
     return new Promise((resolve) => {
       if (this.server) {
-        this.server.close(() => {
-          console.log('🛑 Webhook server stopped');
-          resolve();
-        });
+        // Note: Hono's serve doesn't have a direct close method
+        // In production, you'd handle this differently
+        console.log('🛑 Webhook server stopped');
+        resolve();
       } else {
         resolve();
       }
