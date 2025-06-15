@@ -19,8 +19,9 @@ dotenv.config();
 import { processLeadsFromCSV } from '../src/csv-parser.js';
 import { personalizeTemplate, batchPersonalize } from '../src/ai-service.js';
 import { sendBatchEmails, createEmailFromTemplate } from '../src/email-service.js';
-import { getVoiceServiceStatus } from '../src/voice-service.js';
 import { templates, getTemplateById, getAllTemplateIds } from '../src/templates/index.js';
+import { startCallCampaign, BlandAIService, saveCampaignResults } from '../src/bland-ai-service.js';
+import { startWebhookServer } from '../src/webhook-server.js';
 
 /**
  * Configure command line arguments
@@ -112,17 +113,73 @@ function configureCommandLine() {
           type: 'string'
         });
     })
-    .command('voice <csv-file>', 'Voice AI calls (stub - not implemented)', (yargs) => {
+    .command('coldcall <subcommand>', 'Voice AI cold-calling with Bland.ai', (yargs) => {
       return yargs
-        .positional('csv-file', {
-          describe: 'Path to CSV file containing lead data',
-          type: 'string'
+        .command('run <csv-file>', 'Start cold-calling campaign', (yargs) => {
+          return yargs
+            .positional('csv-file', {
+              describe: 'Path to CSV file containing lead data (Name, PhoneNumber, Email)',
+              type: 'string'
+            })
+            .option('script', {
+              describe: 'Voice script template to use',
+              type: 'string',
+              default: 'default'
+            })
+            .option('batch-size', {
+              describe: 'Number of calls per batch',
+              type: 'number',
+              default: parseInt(process.env.CALL_BATCH_SIZE) || 10
+            })
+            .option('delay', {
+              describe: 'Delay between calls (seconds)',
+              type: 'number',
+              default: parseInt(process.env.CALL_DELAY_SECONDS) || 30
+            })
+            .option('dry-run', {
+              describe: 'Simulate calling without making actual calls',
+              type: 'boolean',
+              default: process.env.DRY_RUN === 'true'
+            })
+            .option('output', {
+              alias: 'o',
+              describe: 'Output file for campaign results',
+              type: 'string'
+            });
         })
-        .option('script', {
-          describe: 'Voice script template',
-          type: 'string',
-          default: 'default'
-        });
+        .command('status', 'Show current call campaign status', (yargs) => {
+          return yargs
+            .option('campaign-id', {
+              describe: 'Specific campaign ID to check',
+              type: 'string'
+            })
+            .option('detailed', {
+              alias: 'd',
+              describe: 'Show detailed status information',
+              type: 'boolean',
+              default: false
+            });
+        })
+        .command('report', 'Generate detailed CSV report of call outcomes', (yargs) => {
+          return yargs
+            .option('campaign-id', {
+              describe: 'Specific campaign ID to report on',
+              type: 'string'
+            })
+            .option('output', {
+              alias: 'o',
+              describe: 'Output CSV file for report',
+              type: 'string',
+              default: 'call-report.csv'
+            })
+            .option('format', {
+              describe: 'Report format (csv, json)',
+              type: 'string',
+              choices: ['csv', 'json'],
+              default: 'csv'
+            });
+        })
+        .demandCommand(1, 'You must specify a coldcall subcommand');
     })
     .option('verbose', {
       alias: 'v',
@@ -376,23 +433,232 @@ async function handleValidateCommand(argv) {
 }
 
 /**
- * Handle voice command (stub)
+ * Handle coldcall run command
  */
-async function handleVoiceCommand(argv) {
-  console.log(colors.yellow('📞 Voice AI Service Status:'));
-  
-  const status = getVoiceServiceStatus();
-  console.log(`   Implementation: ${status.implemented ? '✅ Ready' : '🚧 Not implemented'}`);
-  console.log(`   Status: ${status.message}`);
-  
-  if (status.plannedFeatures) {
-    console.log('\n🔮 Planned Features:');
-    status.plannedFeatures.forEach(feature => {
-      console.log(`   • ${feature}`);
-    });
-  }
+async function handleColdCallRun(argv) {
+  try {
+    console.log(colors.green('📞 Starting cold-calling campaign...'));
+    
+    // Validate CSV file
+    if (!fs.existsSync(argv.csvFile)) {
+      console.error(colors.red(`❌ CSV file not found: ${argv.csvFile}`));
+      process.exit(1);
+    }
 
-  console.log(colors.magenta('\n📞 This feature will be available in a future release.'));
+    // Process CSV file for voice calling
+    console.log(colors.yellow('📄 Processing CSV file for voice calling...'));
+    const { validLeads, invalidLeads, stats } = await processLeadsFromCSV(argv.csvFile, {
+      requirePhone: true
+    });
+    
+    console.log(colors.cyan(`📊 CSV Processing Results:`));
+    console.log(`   Total leads: ${stats.total}`);
+    console.log(`   Valid leads: ${stats.valid}`);
+    console.log(`   Invalid leads: ${stats.invalid}`);
+
+    if (validLeads.length === 0) {
+      console.error(colors.red('❌ No valid leads with phone numbers found in CSV file'));
+      process.exit(1);
+    }
+
+    // Initialize Bland.ai service
+    const blandService = new BlandAIService();
+    
+    // Start webhook server
+    console.log(colors.yellow('🌐 Starting webhook server...'));
+    const webhookServer = await startWebhookServer();
+    console.log(colors.green(`✅ Webhook server running on port ${webhookServer.port}`));
+
+    // Configure campaign options
+    const campaignOptions = {
+      batchSize: argv.batchSize,
+      delay: argv.delay * 1000, // Convert seconds to milliseconds
+      dryRun: argv.dryRun,
+      script: argv.script
+    };
+
+    if (argv.dryRun) {
+      console.log(colors.magenta('🧪 DRY RUN MODE - No calls will be made'));
+    }
+
+    // Start call campaign
+    console.log(colors.yellow(`📞 Starting campaign with ${validLeads.length} leads...`));
+    const campaignResult = await startCallCampaign(validLeads, campaignOptions);
+
+    // Display results
+    console.log(colors.green('\n📈 Campaign Results:'));
+    console.log(`   Campaign ID: ${campaignResult.campaignId}`);
+    console.log(`   Total calls: ${campaignResult.totalCalls}`);
+    console.log(`   Successful: ${campaignResult.successful}`);
+    console.log(`   Failed: ${campaignResult.failed}`);
+    console.log(`   Batches processed: ${campaignResult.batches}`);
+
+    if (argv.dryRun) {
+      console.log(colors.magenta('   (Dry run - no calls actually made)'));
+    }
+
+    // Save results if output specified
+    if (argv.output) {
+      await saveCampaignResults(campaignResult.campaignId, argv.output);
+      console.log(colors.cyan(`💾 Results saved to: ${argv.output}`));
+    }
+
+    console.log(colors.green('✅ Cold-calling campaign completed successfully!'));
+    console.log(colors.yellow('💡 Use "coldcall status" to check call progress'));
+    console.log(colors.yellow('💡 Use "coldcall report" to generate detailed reports'));
+
+  } catch (error) {
+    console.error(colors.red('❌ Cold-calling campaign failed:'), error.message);
+    if (argv.verbose) {
+      console.error(error.stack);
+    }
+    process.exit(1);
+  }
+}
+
+/**
+ * Handle coldcall status command
+ */
+async function handleColdCallStatus(argv) {
+  try {
+    console.log(colors.green('📊 Cold-calling Campaign Status'));
+    
+    const blandService = new BlandAIService();
+    
+    if (argv.campaignId) {
+      // Get status for specific campaign
+      const status = await blandService.getCampaignStatus(argv.campaignId);
+      
+      console.log(colors.cyan(`\n📞 Campaign: ${argv.campaignId}`));
+      console.log(`   Status: ${status.status}`);
+      console.log(`   Total calls: ${status.totalCalls}`);
+      console.log(`   Completed: ${status.completed}`);
+      console.log(`   In progress: ${status.inProgress}`);
+      console.log(`   Failed: ${status.failed}`);
+      
+      if (argv.detailed && status.calls) {
+        console.log(colors.yellow('\n📋 Call Details:'));
+        status.calls.slice(0, 10).forEach((call, index) => {
+          console.log(`   ${index + 1}. ${call.phoneNumber} - ${call.status} (${call.duration || 'N/A'}s)`);
+        });
+        
+        if (status.calls.length > 10) {
+          console.log(`   ... and ${status.calls.length - 10} more calls`);
+        }
+      }
+    } else {
+      // Get status for all recent campaigns
+      const campaigns = await blandService.getRecentCampaigns();
+      
+      if (campaigns.length === 0) {
+        console.log(colors.yellow('No recent campaigns found.'));
+        return;
+      }
+      
+      console.log(colors.cyan('\n📞 Recent Campaigns:'));
+      campaigns.forEach((campaign, index) => {
+        console.log(`   ${index + 1}. ${campaign.id} - ${campaign.status} (${campaign.totalCalls} calls)`);
+        console.log(`      Created: ${new Date(campaign.createdAt).toLocaleString()}`);
+      });
+    }
+
+  } catch (error) {
+    console.error(colors.red('❌ Failed to get campaign status:'), error.message);
+    if (argv.verbose) {
+      console.error(error.stack);
+    }
+    process.exit(1);
+  }
+}
+
+/**
+ * Handle coldcall report command
+ */
+async function handleColdCallReport(argv) {
+  try {
+    console.log(colors.green('📊 Generating Cold-calling Report...'));
+    
+    const blandService = new BlandAIService();
+    
+    // Get campaign data
+    let campaigns;
+    if (argv.campaignId) {
+      const campaign = await blandService.getCampaignDetails(argv.campaignId);
+      campaigns = [campaign];
+    } else {
+      campaigns = await blandService.getRecentCampaigns();
+    }
+
+    if (campaigns.length === 0) {
+      console.log(colors.yellow('No campaigns found to report on.'));
+      return;
+    }
+
+    // Generate report data
+    const reportData = [];
+    for (const campaign of campaigns) {
+      const details = await blandService.getCampaignDetails(campaign.id);
+      
+      for (const call of details.calls || []) {
+        reportData.push({
+          campaignId: campaign.id,
+          phoneNumber: call.phoneNumber,
+          name: call.name || 'Unknown',
+          email: call.email || '',
+          status: call.status,
+          duration: call.duration || 0,
+          outcome: call.outcome || 'unknown',
+          ivrChoice: call.ivrChoice || 'none',
+          timestamp: call.timestamp || campaign.createdAt,
+          cost: call.cost || 0
+        });
+      }
+    }
+
+    // Save report
+    if (argv.format === 'json') {
+      const jsonReport = {
+        generatedAt: new Date().toISOString(),
+        totalCampaigns: campaigns.length,
+        totalCalls: reportData.length,
+        summary: {
+          completed: reportData.filter(r => r.status === 'completed').length,
+          failed: reportData.filter(r => r.status === 'failed').length,
+          pressedOne: reportData.filter(r => r.ivrChoice === '1').length,
+          pressedTwo: reportData.filter(r => r.ivrChoice === '2').length
+        },
+        calls: reportData
+      };
+      
+      fs.writeFileSync(argv.output, JSON.stringify(jsonReport, null, 2));
+    } else {
+      // CSV format
+      const csvHeader = 'Campaign ID,Phone Number,Name,Email,Status,Duration (s),Outcome,IVR Choice,Timestamp,Cost ($)\n';
+      const csvRows = reportData.map(row =>
+        `${row.campaignId},${row.phoneNumber},"${row.name}","${row.email}",${row.status},${row.duration},${row.outcome},${row.ivrChoice},${row.timestamp},${row.cost}`
+      ).join('\n');
+      
+      fs.writeFileSync(argv.output, csvHeader + csvRows);
+    }
+
+    // Display summary
+    console.log(colors.green('\n📈 Report Summary:'));
+    console.log(`   Total campaigns: ${campaigns.length}`);
+    console.log(`   Total calls: ${reportData.length}`);
+    console.log(`   Completed calls: ${reportData.filter(r => r.status === 'completed').length}`);
+    console.log(`   Failed calls: ${reportData.filter(r => r.status === 'failed').length}`);
+    console.log(`   Pressed 1 (interested): ${reportData.filter(r => r.ivrChoice === '1').length}`);
+    console.log(`   Pressed 2 (opt-out): ${reportData.filter(r => r.ivrChoice === '2').length}`);
+    
+    console.log(colors.cyan(`💾 Report saved to: ${argv.output}`));
+
+  } catch (error) {
+    console.error(colors.red('❌ Failed to generate report:'), error.message);
+    if (argv.verbose) {
+      console.error(error.stack);
+    }
+    process.exit(1);
+  }
 }
 
 /**
@@ -413,8 +679,22 @@ async function main() {
       case 'validate':
         await handleValidateCommand(argv);
         break;
-      case 'voice':
-        await handleVoiceCommand(argv);
+      case 'coldcall':
+        // Handle coldcall subcommands
+        switch (argv._[1]) {
+          case 'run':
+            await handleColdCallRun(argv);
+            break;
+          case 'status':
+            await handleColdCallStatus(argv);
+            break;
+          case 'report':
+            await handleColdCallReport(argv);
+            break;
+          default:
+            console.error(colors.red('Unknown coldcall subcommand. Use: run, status, or report'));
+            process.exit(1);
+        }
         break;
       default:
         console.error(colors.red('Unknown command'));
