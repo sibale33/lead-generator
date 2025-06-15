@@ -1,0 +1,11 @@
+FirstName,LastName,Company,WorkEmail,PersonalEmail,Phone,Industry,Title
+John,Doe,Acme Corp,john.doe@acme.com,john@personal.com,555-0123,Technology,CTO
+Jane,Smith,Beta Healthcare,jane.smith@beta.com,,555-0456,Healthcare,VP Engineering
+Bob,Johnson,Gamma Financial,,bob@gmail.com,555-0789,Finance,Director of Operations
+Alice,Williams,Delta Marketing,alice@delta.co,alice.w@email.com,555-0321,Marketing,Marketing Manager
+Charlie,Brown,Echo Consulting,charlie.brown@echo.ltd,,555-0654,Consulting,Senior Partner
+Diana,Davis,Foxtrot Tech,diana.davis@foxtrot.io,diana.d@outlook.com,555-0987,Technology,Head of Product
+Eve,Wilson,Golf Retail,eve.wilson@golf.com,,555-0135,Retail,Operations Director
+Frank,Miller,Hotel Logistics,,frank.miller@gmail.com,555-0246,Logistics,Supply Chain Manager
+Grace,Taylor,India Software,grace@india.dev,grace.taylor@yahoo.com,555-0357,Technology,Software Architect
+Henry,Anderson,Juliet Manufacturing,henry.anderson@juliet.com,,555-0468,Manufacturing,Plant Manager
