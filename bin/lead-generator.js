@@ -22,6 +22,7 @@ import { sendBatchEmails, createEmailFromTemplate } from '../src/email-service.j
 import { templates, getTemplateById, getAllTemplateIds } from '../src/templates/index.js';
 import { startCallCampaign, BlandAIService, saveCampaignResults } from '../src/bland-ai-service.js';
 import { startWebhookServer } from '../src/webhook-server.js';
+import { runSetupCommand } from '../src/cli-setup.js';
 
 /**
  * Configure command line arguments
@@ -180,6 +181,18 @@ function configureCommandLine() {
             });
         })
         .demandCommand(1, 'You must specify a coldcall subcommand');
+    })
+    .command('setup', 'Interactive configuration setup', (yargs) => {
+      return yargs
+        .option('config-path', {
+          describe: 'Custom path for configuration file',
+          type: 'string'
+        })
+        .option('force', {
+          describe: 'Overwrite existing configuration',
+          type: 'boolean',
+          default: false
+        });
     })
     .option('verbose', {
       alias: 'v',
@@ -662,6 +675,53 @@ async function handleColdCallReport(argv) {
 }
 
 /**
+ * Handle setup command
+ */
+async function handleSetupCommand(argv) {
+  try {
+    console.log(colors.green('⚙️  Lead Generator Setup'));
+    
+    // Check if config already exists and warn user
+    if (!argv.force) {
+      const { getConfigPath, loadConfig, getDefaultConfig } = await import('../src/config-manager.js');
+      const configPath = argv.configPath || getConfigPath();
+      const existingConfig = loadConfig(configPath);
+      const defaultConfig = getDefaultConfig();
+      
+      // Check if config has been customized (not just defaults)
+      const hasCustomConfig = JSON.stringify(existingConfig) !== JSON.stringify(defaultConfig);
+      
+      if (hasCustomConfig) {
+        console.log(colors.yellow('⚠️  Existing configuration found.'));
+        console.log(colors.yellow('   Use --force to overwrite existing configuration.'));
+        console.log(colors.cyan(`   Config location: ${configPath}`));
+        process.exit(0);
+      }
+    }
+    
+    // Run setup
+    const result = await runSetupCommand(argv.configPath);
+    
+    if (!result.success) {
+      if (result.cancelled) {
+        console.log(colors.yellow('Setup cancelled by user.'));
+        process.exit(0);
+      } else {
+        console.error(colors.red(`Setup failed: ${result.error}`));
+        process.exit(1);
+      }
+    }
+    
+  } catch (error) {
+    console.error(colors.red('❌ Setup failed:'), error.message);
+    if (argv.verbose) {
+      console.error(error.stack);
+    }
+    process.exit(1);
+  }
+}
+
+/**
  * Main function
  */
 async function main() {
@@ -695,6 +755,9 @@ async function main() {
             console.error(colors.red('Unknown coldcall subcommand. Use: run, status, or report'));
             process.exit(1);
         }
+        break;
+      case 'setup':
+        await handleSetupCommand(argv);
         break;
       default:
         console.error(colors.red('Unknown command'));
