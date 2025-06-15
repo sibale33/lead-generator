@@ -6,6 +6,11 @@
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import {
+  getRandomVoiceTemplate,
+  getVoiceTemplateById,
+  personalizeVoiceScript
+} from './voice-templates/index.js';
 
 dotenv.config();
 
@@ -86,26 +91,50 @@ export class BlandAIService {
   }
 
   /**
-   * Create personalized voice script for contact
+   * Create personalized voice script for contact using template system
    * @param {Object} contact - Contact information
+   * @param {Object} options - Script options (templateId, etc.)
    * @returns {string} Voice script
    */
-  createVoiceScript(contact) {
-    const firstName = contact.Name?.split(' ')[0] || 'there';
-    
-    return `Hello ${firstName}, this is ${this.config.callerName} calling from ${this.config.companyName}. 
+  createVoiceScript(contact, options = {}) {
+    try {
+      // Get template - use specified template or random one
+      let template;
+      if (options.templateId) {
+        template = getVoiceTemplateById(options.templateId);
+        if (!template) {
+          console.warn(`Template ${options.templateId} not found, using random template`);
+          template = getRandomVoiceTemplate();
+        }
+      } else {
+        template = getRandomVoiceTemplate();
+      }
+
+      // Create config object for personalization
+      const config = {
+        callerName: this.config.callerName,
+        companyName: this.config.companyName,
+        calendlyLink: this.config.calendlyLink
+      };
+
+      // Personalize the script
+      const personalizedScript = personalizeVoiceScript(template, contact, config);
+      
+      return personalizedScript;
+    } catch (error) {
+      console.error('Error creating voice script:', error);
+      // Fallback to simple script if template system fails
+      const firstName = contact.Name?.split(' ')[0] || 'there';
+      return `Hello ${firstName}, this is ${this.config.callerName} calling from ${this.config.companyName}.
 
 I'm an AI assistant reaching out about potential opportunities that might interest you. This call will take just a moment.
-
-I have some information that could be valuable for your business growth. 
 
 If you'd like me to send you a link to schedule a brief conversation with our team, please press 1 on your keypad.
 
 If you'd prefer not to receive future calls from us, please press 2 and we'll remove you from our calling list.
 
-If you don't respond, I'll assume you're not available and we may try calling again at a better time.
-
 Thank you for your time, ${firstName}.`;
+    }
   }
 
   /**
@@ -230,8 +259,8 @@ Thank you for your time, ${firstName}.`;
       // Format phone number
       const formattedPhone = this.formatPhoneNumber(contact.PhoneNumber);
       
-      // Create voice script
-      const script = this.createVoiceScript(contact);
+      // Create voice script using template system
+      const script = this.createVoiceScript(contact, options);
 
       // Prepare API request
       const requestBody = {
