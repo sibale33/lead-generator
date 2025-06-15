@@ -1,6 +1,6 @@
 {
   "name": "@profullstack/lead-generator",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A CLI tool for sending mass lead emails to prospective clients from CSV files with AI-powered personalization",
   "type": "module",
   "main": "index.js",
