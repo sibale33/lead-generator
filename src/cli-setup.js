@@ -66,7 +66,7 @@ export async function promptForConfig() {
   console.log('📧 Email Configuration (Mailgun)');
   console.log('--------------------------------');
 
-  const emailAnswers = await inquirer.default([
+  const emailAnswers = await inquirer.prompt([
     {
       type: 'input',
       name: 'mailgunApiKey',
@@ -111,7 +111,7 @@ export async function promptForConfig() {
   console.log('\n🤖 AI Configuration (OpenAI)');
   console.log('----------------------------');
 
-  const aiAnswers = await inquirer.default([
+  const aiAnswers = await inquirer.prompt([
     {
       type: 'input',
       name: 'openaiApiKey',
@@ -130,7 +130,7 @@ export async function promptForConfig() {
   console.log('\n📞 Voice Configuration (Bland.ai)');
   console.log('----------------------------------');
 
-  const voiceAnswers = await inquirer.default([
+  const voiceAnswers = await inquirer.prompt([
     {
       type: 'input',
       name: 'blandaiApiKey',
@@ -158,7 +158,7 @@ export async function promptForConfig() {
   console.log('\n🔗 Webhook Configuration');
   console.log('------------------------');
 
-  const webhookAnswers = await inquirer.default([
+  const webhookAnswers = await inquirer.prompt([
     {
       type: 'confirm',
       name: 'webhooksEnabled',
@@ -249,7 +249,7 @@ export function displayConfigSummary(config) {
  * @returns {Promise<boolean>} True if user confirms
  */
 export async function confirmSaveConfig() {
-  const answer = await inquirer.default([
+  const answer = await inquirer.prompt([
     {
       type: 'confirm',
       name: 'confirm',
