@@ -38,19 +38,47 @@ export {
   getVoiceServiceStatus 
 } from './src/voice-service.js';
 
-// Templates
-export { 
-  templates, 
-  templatesByCategory, 
-  templatesByTone, 
-  getTemplateById, 
-  getTemplatesByCategory, 
-  getTemplatesByTone, 
-  getRandomTemplate, 
-  getAllTemplateIds, 
-  getAllCategories, 
-  getAllTones 
+// Email Templates
+export {
+  templates,
+  templatesByCategory,
+  templatesByTone,
+  getTemplateById,
+  getTemplatesByCategory,
+  getTemplatesByTone,
+  getRandomTemplate,
+  getAllTemplateIds,
+  getAllCategories,
+  getAllTones
 } from './src/email-templates/index.js';
+
+// Import for internal use
+import {
+  templates as emailTemplates,
+  getTemplateById as getEmailTemplateById,
+  getAllTemplateIds as getAllEmailTemplateIds
+} from './src/email-templates/index.js';
+
+// SMS Templates and Services
+export {
+  smsTemplates,
+  smsTemplatesByCategory,
+  smsTemplatesByTone,
+  getSmsTemplateById,
+  getSmsTemplatesByCategory,
+  getSmsTemplatesByTone,
+  getRandomSmsTemplate,
+  getAllSmsTemplateIds,
+  getAllSmsCategories,
+  getAllSmsTones,
+  personalizeSmsTemplate
+} from './src/sms-templates/index.js';
+
+export {
+  SmsService,
+  createSmsFromTemplate,
+  sendBatchSmsFromTemplates
+} from './src/sms-service.js';
 
 /**
  * Lead Generator class - Main orchestrator
@@ -120,9 +148,9 @@ export class LeadGenerator {
       }
 
       // Step 2: Select templates
-      let selectedTemplates = options.templates || templates;
+      let selectedTemplates = options.templates || emailTemplates;
       if (options.templateId) {
-        const template = getTemplateById(options.templateId);
+        const template = getEmailTemplateById(options.templateId);
         if (!template) {
           throw new Error(`Template not found: ${options.templateId}`);
         }
@@ -227,7 +255,7 @@ export class LeadGenerator {
    * @returns {Array} Filtered templates
    */
   getTemplates(filters = {}) {
-    let filteredTemplates = templates;
+    let filteredTemplates = emailTemplates;
 
     if (filters.category) {
       filteredTemplates = getTemplatesByCategory(filters.category);
@@ -246,7 +274,7 @@ export class LeadGenerator {
    * @returns {Promise<Object>} Personalized email preview
    */
   async previewEmail(templateId, leadData) {
-    const template = getTemplateById(templateId);
+    const template = getEmailTemplateById(templateId);
     if (!template) {
       throw new Error(`Template not found: ${templateId}`);
     }
@@ -304,12 +332,90 @@ export function createSampleCSV(filePath, count = 5) {
   });
 }
 
+// Voice Templates
+export {
+  voiceTemplates,
+  voiceTemplatesByCategory,
+  voiceTemplatesByTone,
+  getVoiceTemplateById,
+  getVoiceTemplatesByCategory,
+  getVoiceTemplatesByTone,
+  getRandomVoiceTemplate,
+  getAllVoiceTemplateIds,
+  getAllVoiceCategories,
+  getAllVoiceTones
+} from './src/voice-templates/index.js';
+
+// CSV Status Tracker
+export {
+  addStatusColumns,
+  updateCSVStatus,
+  getStatusFromCSV,
+  createStatusBackup,
+  getContactsByStatus,
+  EMAIL_STATUSES as EMAIL_STATUS,
+  VOICE_STATUSES as VOICE_STATUS,
+  SMS_STATUS
+} from './src/csv-status-tracker.js';
+
+// Convenience functions for SMS lead generation
+export async function generateSmsLeads(csvFilePath, options = {}) {
+  const { SmsService } = await import('./src/sms-service.js');
+  const { processLeadsFromCSV } = await import('./src/csv-parser.js');
+  const { smsTemplates, getSmsTemplateById } = await import('./src/sms-templates/index.js');
+  
+  const smsService = new SmsService(options.twilio || {});
+  const csvResults = await processLeadsFromCSV(csvFilePath);
+  
+  let selectedTemplates = options.templates || smsTemplates;
+  if (options.templateId) {
+    const template = getSmsTemplateById(options.templateId);
+    if (!template) {
+      throw new Error(`SMS template not found: ${options.templateId}`);
+    }
+    selectedTemplates = [template];
+  }
+  
+  return await smsService.sendBatchFromTemplates(
+    selectedTemplates,
+    csvResults.validLeads,
+    options
+  );
+}
+
+// Convenience functions for voice lead generation
+export async function generateVoiceLeads(csvFilePath, options = {}) {
+  const { VoiceService } = await import('./src/voice-service.js');
+  const { processLeadsFromCSV } = await import('./src/csv-parser.js');
+  const { voiceTemplates, getVoiceTemplateById } = await import('./src/voice-templates/index.js');
+  
+  const voiceService = new VoiceService(options.twilio || {});
+  const csvResults = await processLeadsFromCSV(csvFilePath);
+  
+  let selectedTemplates = options.templates || voiceTemplates;
+  if (options.templateId) {
+    const template = getVoiceTemplateById(options.templateId);
+    if (!template) {
+      throw new Error(`Voice template not found: ${options.templateId}`);
+    }
+    selectedTemplates = [template];
+  }
+  
+  return await voiceService.makeBatchCalls(
+    selectedTemplates,
+    csvResults.validLeads,
+    options
+  );
+}
+
 // Default export
 export default {
   LeadGenerator,
   quickStart,
   createSampleCSV,
-  templates,
-  getTemplateById,
-  getAllTemplateIds
+  templates: emailTemplates,
+  getTemplateById: getEmailTemplateById,
+  getAllTemplateIds: getAllEmailTemplateIds,
+  generateSmsLeads,
+  generateVoiceLeads
 };

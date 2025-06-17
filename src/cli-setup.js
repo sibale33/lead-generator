@@ -155,7 +155,40 @@ export async function promptForConfig() {
     }
   ]);
 
-  console.log('\n🔗 Webhook Configuration');
+  console.log('\n📱 SMS Configuration (Twilio)');
+  console.log('-----------------------------');
+
+  const smsAnswers = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'twilioAccountSid',
+      message: 'Twilio Account SID (optional):',
+    },
+    {
+      type: 'input',
+      name: 'twilioAuthToken',
+      message: 'Twilio Auth Token (optional):',
+    },
+    {
+      type: 'input',
+      name: 'twilioFromNumber',
+      message: 'Twilio From Phone Number (optional):',
+      validate: (input) => {
+        if (!input.trim()) return true;
+        const phoneRegex = /^\+?[\d\s\-\(\)]+$/;
+        return phoneRegex.test(input) ? true : 'Please enter a valid phone number';
+      }
+    },
+    {
+      type: 'number',
+      name: 'smsBatchSize',
+      message: 'SMS Batch Size:',
+      default: defaultConfig.sms?.batchSize || 50,
+      validate: (input) => input > 0 ? true : 'Batch size must be greater than 0'
+    }
+  ]);
+
+  console.log('\n� Webhook Configuration');
   console.log('------------------------');
 
   const webhookAnswers = await inquirer.prompt([
@@ -204,6 +237,14 @@ export async function promptForConfig() {
       },
       batchSize: voiceAnswers.voiceBatchSize
     },
+    sms: {
+      twilio: {
+        accountSid: smsAnswers.twilioAccountSid || '',
+        authToken: smsAnswers.twilioAuthToken || '',
+        phoneNumber: smsAnswers.twilioFromNumber || ''
+      },
+      batchSize: smsAnswers.smsBatchSize
+    },
     webhooks: {
       enabled: webhookAnswers.webhooksEnabled,
       port: webhookAnswers.webhooksPort || defaultConfig.webhooks.port
@@ -237,7 +278,13 @@ export function displayConfigSummary(config) {
   console.log(`   Bland.ai Phone: ${config.voice?.blandAI?.phoneNumber || '(not set)'}`);
   console.log(`   Batch Size: ${config.voice?.batchSize || 'N/A'}`);
 
-  console.log('\n🔗 Webhook Settings:');
+  console.log('\n📱 SMS Settings:');
+  console.log(`   Twilio Account SID: ${config.sms?.twilio?.accountSid ? maskApiKey(config.sms.twilio.accountSid) : '(not set)'}`);
+  console.log(`   Twilio Auth Token: ${config.sms?.twilio?.authToken ? maskApiKey(config.sms.twilio.authToken) : '(not set)'}`);
+  console.log(`   Twilio Phone: ${config.sms?.twilio?.phoneNumber || '(not set)'}`);
+  console.log(`   Batch Size: ${config.sms?.batchSize || 'N/A'}`);
+
+  console.log('\n� Webhook Settings:');
   console.log(`   Enabled: ${config.webhooks?.enabled ? 'Yes' : 'No'}`);
   if (config.webhooks?.enabled) {
     console.log(`   Port: ${config.webhooks.port}`);

@@ -33,6 +33,18 @@ export const VOICE_STATUSES = {
 };
 
 /**
+ * SMS status constants
+ */
+export const SMS_STATUS = {
+  SENT: 'sent',
+  FAILED: 'failed',
+  DELIVERED: 'delivered',
+  UNDELIVERED: 'undelivered',
+  REPLIED: 'replied',
+  OPTED_OUT: 'opted-out'
+};
+
+/**
  * Status column names
  */
 const STATUS_COLUMNS = {
@@ -40,6 +52,8 @@ const STATUS_COLUMNS = {
   EMAIL_NOTES: 'EmailNotes',
   VOICE_STATUS: 'VoiceStatus',
   VOICE_NOTES: 'VoiceNotes',
+  SMS_STATUS: 'SmsStatus',
+  SMS_NOTES: 'SmsNotes',
   LAST_UPDATED: 'LastUpdated'
 };
 
@@ -64,9 +78,10 @@ async function hasStatusColumns(csvPath) {
         headerChecked = true;
         const hasEmailStatus = headers.includes(STATUS_COLUMNS.EMAIL_STATUS);
         const hasVoiceStatus = headers.includes(STATUS_COLUMNS.VOICE_STATUS);
+        const hasSmsStatus = headers.includes(STATUS_COLUMNS.SMS_STATUS);
         const hasLastUpdated = headers.includes(STATUS_COLUMNS.LAST_UPDATED);
         
-        resolve(hasEmailStatus && hasVoiceStatus && hasLastUpdated);
+        resolve(hasEmailStatus && hasVoiceStatus && hasSmsStatus && hasLastUpdated);
         stream.destroy();
       })
       .on('error', (error) => {
@@ -157,9 +172,10 @@ export function addStatusColumns(csvPath) {
     // Check if status columns already exist
     const hasEmailStatus = headers.includes(STATUS_COLUMNS.EMAIL_STATUS);
     const hasVoiceStatus = headers.includes(STATUS_COLUMNS.VOICE_STATUS);
+    const hasSmsStatus = headers.includes(STATUS_COLUMNS.SMS_STATUS);
     const hasLastUpdated = headers.includes(STATUS_COLUMNS.LAST_UPDATED);
     
-    if (hasEmailStatus && hasVoiceStatus && hasLastUpdated) {
+    if (hasEmailStatus && hasVoiceStatus && hasSmsStatus && hasLastUpdated) {
       return {
         success: true,
         columnsAdded: false,
@@ -176,6 +192,10 @@ export function addStatusColumns(csvPath) {
     if (!hasVoiceStatus) {
       newHeaders.push(STATUS_COLUMNS.VOICE_STATUS);
       newHeaders.push(STATUS_COLUMNS.VOICE_NOTES);
+    }
+    if (!hasSmsStatus) {
+      newHeaders.push(STATUS_COLUMNS.SMS_STATUS);
+      newHeaders.push(STATUS_COLUMNS.SMS_NOTES);
     }
     if (!hasLastUpdated) {
       newHeaders.push(STATUS_COLUMNS.LAST_UPDATED);
@@ -273,6 +293,14 @@ export async function updateCSVStatus(csvPath, statusUpdate) {
           updatedRow[STATUS_COLUMNS.VOICE_NOTES] = statusUpdate.voiceNotes;
         }
         
+        // Update SMS status and notes
+        if (statusUpdate.smsStatus) {
+          updatedRow[STATUS_COLUMNS.SMS_STATUS] = statusUpdate.smsStatus;
+        }
+        if (statusUpdate.smsNotes) {
+          updatedRow[STATUS_COLUMNS.SMS_NOTES] = statusUpdate.smsNotes;
+        }
+        
         // Update timestamp
         updatedRow[STATUS_COLUMNS.LAST_UPDATED] = new Date().toISOString();
         
@@ -347,6 +375,8 @@ export async function getStatusFromCSV(csvPath, contact) {
         emailNotes: foundContact[STATUS_COLUMNS.EMAIL_NOTES] || '',
         voiceStatus: foundContact[STATUS_COLUMNS.VOICE_STATUS] || '',
         voiceNotes: foundContact[STATUS_COLUMNS.VOICE_NOTES] || '',
+        smsStatus: foundContact[STATUS_COLUMNS.SMS_STATUS] || '',
+        smsNotes: foundContact[STATUS_COLUMNS.SMS_NOTES] || '',
         lastUpdated: foundContact[STATUS_COLUMNS.LAST_UPDATED] || ''
       }
     };
@@ -411,6 +441,10 @@ export async function getContactsByStatus(csvPath, filters = {}) {
         matches = false;
       }
       
+      if (filters.smsStatus && row[STATUS_COLUMNS.SMS_STATUS] !== filters.smsStatus) {
+        matches = false;
+      }
+      
       return matches;
     });
 
@@ -431,6 +465,7 @@ export async function getContactsByStatus(csvPath, filters = {}) {
 export default {
   EMAIL_STATUSES,
   VOICE_STATUSES,
+  SMS_STATUS,
   addStatusColumns,
   updateCSVStatus,
   getStatusFromCSV,
