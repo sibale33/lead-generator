@@ -15,19 +15,32 @@ const __dirname = path.dirname(__filename);
 
 describe('Webhook Server', () => {
   let server;
-  const testPort = 3002; // Use different port for testing
+  let currentTestPort = 3002; // Base port for testing
   const testLogFile = path.join(__dirname, 'temp', 'test-webhook-logs.json');
 
-  beforeEach(() => {
+  // Helper function to get unique port for each test
+  const getNextPort = () => ++currentTestPort;
+
+  beforeEach(async () => {
     // Clean up test files
     if (fs.existsSync(testLogFile)) {
       fs.unlinkSync(testLogFile);
+    }
+    
+    // Ensure temp directory exists
+    const tempDir = path.dirname(testLogFile);
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
     }
   });
 
   afterEach(async () => {
     if (server) {
-      await server.stop();
+      try {
+        await server.stop();
+      } catch (error) {
+        console.warn('Warning: Error stopping server:', error.message);
+      }
       server = null;
     }
     
@@ -35,6 +48,9 @@ describe('Webhook Server', () => {
     if (fs.existsSync(testLogFile)) {
       fs.unlinkSync(testLogFile);
     }
+    
+    // Small delay to ensure port is released
+    await new Promise(resolve => setTimeout(resolve, 100));
   });
 
   describe('WebhookServer class', () => {
@@ -48,15 +64,16 @@ describe('Webhook Server', () => {
     });
 
     it('should initialize with custom configuration', () => {
+      const testPortForConfig = getNextPort();
       const config = {
-        port: testPort,
+        port: testPortForConfig,
         logFile: testLogFile,
         calendlyLink: 'https://calendly.com/test'
       };
       
       const webhookServer = new WebhookServer(config);
       
-      expect(webhookServer.config.port).to.equal(testPort);
+      expect(webhookServer.config.port).to.equal(testPortForConfig);
       expect(webhookServer.config.logFile).to.equal(testLogFile);
       expect(webhookServer.config.calendlyLink).to.equal('https://calendly.com/test');
     });
@@ -73,7 +90,7 @@ describe('Webhook Server', () => {
 
     beforeEach(() => {
       webhookServer = new WebhookServer({
-        port: testPort,
+        port: getNextPort(),
         logFile: testLogFile
       });
     });
@@ -387,21 +404,24 @@ describe('Webhook Server', () => {
 
   describe('Server lifecycle', () => {
     it('should start server successfully', async () => {
-      server = new WebhookServer({ port: testPort });
+      const testPortForStart = getNextPort();
+      server = new WebhookServer({ port: testPortForStart });
       
       const startedServer = await server.start();
       expect(startedServer).to.exist;
     });
 
     it('should start server with startWebhookServer function', async () => {
-      server = await startWebhookServer({ port: testPort + 1 });
+      const testPortForFunction = getNextPort();
+      server = await startWebhookServer({ port: testPortForFunction });
       
       expect(server).to.be.instanceOf(WebhookServer);
-      expect(server.config.port).to.equal(testPort + 1);
+      expect(server.config.port).to.equal(testPortForFunction);
     });
 
     it('should stop server gracefully', async () => {
-      server = new WebhookServer({ port: testPort + 2 });
+      const testPortForStop = getNextPort();
+      server = new WebhookServer({ port: testPortForStop });
       await server.start();
       
       // This should not throw an error

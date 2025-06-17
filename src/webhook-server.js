@@ -380,15 +380,30 @@ export class WebhookServer {
   async start() {
     return new Promise((resolve, reject) => {
       try {
-        this.server = serve({
+        const serverOptions = {
           fetch: this.app.fetch,
           port: this.config.port
-        });
+        };
 
-        console.log(`🎣 Webhook server listening on port ${this.config.port}`);
-        console.log(`📡 Webhook URL: http://localhost:${this.config.port}/webhook`);
-        
-        resolve(this.server);
+        this.server = serve(serverOptions);
+
+        // Handle server startup
+        if (this.server && typeof this.server.then === 'function') {
+          // If serve returns a promise, wait for it
+          this.server
+            .then((actualServer) => {
+              this.server = actualServer;
+              console.log(`🎣 Webhook server listening on port ${this.config.port}`);
+              console.log(`📡 Webhook URL: http://localhost:${this.config.port}/webhook`);
+              resolve(this.server);
+            })
+            .catch(reject);
+        } else {
+          // If serve returns synchronously
+          console.log(`🎣 Webhook server listening on port ${this.config.port}`);
+          console.log(`📡 Webhook URL: http://localhost:${this.config.port}/webhook`);
+          resolve(this.server);
+        }
 
       } catch (error) {
         console.error('❌ Webhook server error:', error);
@@ -403,12 +418,22 @@ export class WebhookServer {
    */
   async stop() {
     return new Promise((resolve) => {
-      if (this.server) {
-        // Note: Hono's serve doesn't have a direct close method
-        // In production, you'd handle this differently
-        console.log('🛑 Webhook server stopped');
-        resolve();
+      if (this.server && this.server.close) {
+        this.server.close(() => {
+          console.log('🛑 Webhook server stopped');
+          this.server = null;
+          resolve();
+        });
+      } else if (this.server && this.server.server) {
+        // Handle case where server is wrapped
+        this.server.server.close(() => {
+          console.log('🛑 Webhook server stopped');
+          this.server = null;
+          resolve();
+        });
       } else {
+        console.log('🛑 Webhook server stopped (no active server)');
+        this.server = null;
         resolve();
       }
     });
