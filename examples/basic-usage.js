@@ -125,7 +125,7 @@ async function individualModulesExample() {
   try {
     // Import individual modules
     const { processLeadsFromCSV } = await import('../src/csv-parser.js');
-    const { getTemplateById } = await import('../src/templates/index.js');
+    const { getTemplateById } = await import('../src/email-templates/index.js');
     const { personalizeTemplate } = await import('../src/ai-service.js');
 
     // Process CSV file

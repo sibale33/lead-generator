@@ -19,7 +19,7 @@ dotenv.config();
 import { processLeadsFromCSV } from '../src/csv-parser.js';
 import { personalizeTemplate, batchPersonalize } from '../src/ai-service.js';
 import { sendBatchEmails, createEmailFromTemplate } from '../src/email-service.js';
-import { templates, getTemplateById, getAllTemplateIds } from '../src/templates/index.js';
+import { templates, getTemplateById, getAllTemplateIds } from '../src/email-templates/index.js';
 import { startCallCampaign, BlandAIService, saveCampaignResults } from '../src/bland-ai-service.js';
 import { startWebhookServer } from '../src/webhook-server.js';
 import { runSetupCommand } from '../src/cli-setup.js';

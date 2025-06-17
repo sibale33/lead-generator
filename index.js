@@ -50,7 +50,7 @@ export {
   getAllTemplateIds, 
   getAllCategories, 
   getAllTones 
-} from './src/templates/index.js';
+} from './src/email-templates/index.js';
 
 /**
  * Lead Generator class - Main orchestrator
